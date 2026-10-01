@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+<meta charset="UTF-8">
+
+<title>Cyber Warfare Command Center</title>
+
+<link rel="stylesheet"
+href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+<script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+
+<style>
+
+body{
+    margin:0;
+    background:#020611;
+    overflow:hidden;
+    font-family:Arial;
+    color:#00ffcc;
+}
+
+#map{
+    width:100vw;
+    height:100vh;
+}
+
+.topbar{
+    position:absolute;
+    top:0;
+    width:100%;
+    height:60px;
+    background:rgba(0,0,0,0.85);
+    z-index:9999;
+    display:flex;
+    align-items:center;
+    padding-left:20px;
+    font-size:26px;
+    font-weight:bold;
+    color:#00ffcc;
+}
+
+.sidebar{
+    position:absolute;
+    right:10px;
+    top:70px;
+    width:360px;
+    height:85vh;
+    background:rgba(0,0,0,0.8);
+    border:1px solid #00ffcc;
+    overflow:auto;
+    z-index:9999;
+    padding:10px;
+}
+
+.alert{
+    margin-bottom:10px;
+    padding-bottom:10px;
+    border-bottom:1px solid #00ffcc;
+}
+
+.stats{
+    position:absolute;
+    left:20px;
+    bottom:20px;
+    width:300px;
+    background:rgba(0,0,0,0.8);
+    border:1px solid #00ffcc;
+    padding:20px;
+    z-index:9999;
+}
+
+.attack{
+    color:red;
+}
+
+.defense{
+    color:#00ff00;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="topbar">
+    CYBER WARFARE MODE
+</div>
+
+<div id="map"></div>
+
+<div class="sidebar" id="alerts">
+    <h2>LIVE EVENTS</h2>
+</div>
+
+<div class="stats">
+    <h2>WAR STATUS</h2>
+
+    <p>Total Attacks:
+        <span id="attacks">0</span>
+    </p>
+
+    <p>Blocked:
+        <span id="blocked">0</span>
+    </p>
+
+    <p>Defense Success:
+        <span id="success">0%</span>
+    </p>
+</div>
+
+<script>
+
+////////////////////////////////////////////////////////////
+// MAP
+////////////////////////////////////////////////////////////
+
+const map = L.map('map',{
+    zoomControl:false
+}).setView([20,0],2);
+
+L.tileLayer(
+'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+).addTo(map);
+
+////////////////////////////////////////////////////////////
+// SOCKET
+////////////////////////////////////////////////////////////
+
+const socket = io("http://localhost:5000");
+
+let totalAttacks = 0;
+let blockedAttacks = 0;
+
+////////////////////////////////////////////////////////////
+// EVENTS
+////////////////////////////////////////////////////////////
+
+socket.on("war_event", function(data){
+
+    totalAttacks++;
+
+    if(data.blocked){
+        blockedAttacks++;
+    }
+
+    let success = ((blockedAttacks/totalAttacks)*100).toFixed(1);
+
+    document.getElementById("attacks").innerHTML = totalAttacks;
+    document.getElementById("blocked").innerHTML = blockedAttacks;
+    document.getElementById("success").innerHTML = success + "%";
+
+    ////////////////////////////////////////////////////////
+    // ATTACKER
+    ////////////////////////////////////////////////////////
+
+    const attacker = L.circleMarker(
+        [data.source_lat,data.source_lon],
+        {
+            radius:10
+        }
+    ).addTo(map);
+
+    ////////////////////////////////////////////////////////
+    // TARGET
+    ////////////////////////////////////////////////////////
+
+    const target = L.circleMarker(
+        [data.target_lat,data.target_lon],
+        {
+            radius:10
+        }
+    ).addTo(map);
+
+    ////////////////////////////////////////////////////////
+    // ATTACK LINE
+    ////////////////////////////////////////////////////////
+
+    const attackLine = L.polyline(
+        [
+            [data.source_lat,data.source_lon],
+            [data.target_lat,data.target_lon]
+        ]
+    ).addTo(map);
+
+    ////////////////////////////////////////////////////////
+    // DEFENSE LINE
+    ////////////////////////////////////////////////////////
+
+    if(data.blocked){
+
+        const defenseLine = L.polyline(
+            [
+                [data.target_lat,data.target_lon],
+                [data.source_lat,data.source_lon]
+            ]
+        ).addTo(map);
+
+        setTimeout(()=>{
+            map.removeLayer(defenseLine);
+        },3000);
+    }
+
+    ////////////////////////////////////////////////////////
+    // ALERT PANEL
+    ////////////////////////////////////////////////////////
+
+    const alerts = document.getElementById("alerts");
+
+    alerts.innerHTML += `
+        <div class="alert">
+            <span class="attack">
+                ATTACK:
+            </span>
+            ${data.attack}
+            <br>
+
+            Source: ${data.source_country}
+            <br>
+
+            Target: ${data.target_country}
+            <br>
+
+            <span class="defense">
+                BLOCKED:
+            </span>
+            ${data.blocked}
+        </div>
+    `;
+
+    ////////////////////////////////////////////////////////
+    // CLEANUP
+    ////////////////////////////////////////////////////////
+
+    setTimeout(()=>{
+
+        map.removeLayer(attacker);
+        map.removeLayer(target);
+        map.removeLayer(attackLine);
+
+    },5000);
+
+});
+
+</script>
+
+</body>
+</html>
